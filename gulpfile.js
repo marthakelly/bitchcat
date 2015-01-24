@@ -6,7 +6,7 @@ var browserify = require('gulp-browserify');
 var del = require('del');
 
 gulp.task('clean', function clean() {
-    return del(['dist']);
+  return del(['dist']);
 });
 
 gulp.task('compile-stylesheets', function compileCSS() {
