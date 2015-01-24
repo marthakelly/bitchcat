@@ -1,0 +1,40 @@
+{
+  "name": "bitchcat",
+  "description": "a game about a cat named bitchcat",
+  "version": "0.0.0",
+  "author": "Martha Schumann",
+  "contributors": [
+    {
+      "name": "Martha Schumann",
+      "email": "mk.schumann@gmail.com"
+    }
+  ],
+  "scripts": {
+    "build": "gulp build",
+    "start": "gulp",
+    "lint": "lint-trap",
+    "test": "npm run lint && npm run cover",
+    "cover": "run-browser 'tests/*.js' --phantom --report text --report html --report cobertura | tee tests/test.js.tap | tap-spec",
+    "view-cover": "npm run cover && opn ./coverage/index.html"
+  },
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:marthakelly/bitchcat.git"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "del": "^1.1.1",
+    "gulp": "^3.8.10",
+    "gulp-browserify": "^0.5.1",
+    "gulp-connect": "^2.2.0",
+    "gulp-ruby-sass": "^1.0.0-alpha.2",
+    "lint-trap": "^1.0.0",
+    "opn": "^1.0.1",
+    "run-browser": "^2.0.1",
+    "tap-spec": "^2.2.0",
+    "tape": "^3.4.0"
+  },
+  "keywords": [],
+  "private": true
+}

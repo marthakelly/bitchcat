@@ -1,0 +1,10 @@
+TAP version 13
+# Testing that tests work
+ok 1 assert.ok is functioning
+
+1..1
+# tests 1
+# pass  1
+
+# ok
+
