@@ -16,7 +16,7 @@ gulp.task('compile-stylesheets', function compileCSS() {
 });
 
 gulp.task('compile-javascripts', function compileJS() {
-  gulp.src('index.js')
+  gulp.src(['index.js', 'assets/javascripts/**/*.js'])
     .pipe(browserify())
     .pipe(gulp.dest('dist/javascripts'))
     .pipe(connect.reload());
@@ -49,7 +49,9 @@ gulp.task('serve', function serveDemo() {
 
 gulp.task('build',
   ['compile-stylesheets', 'compile-javascripts', 'compile-static']);
+
 gulp.task('watch',
   ['watch-stylesheets', 'watch-javascripts', 'watch-static']);
+
 gulp.task('default',
   ['clean', 'build', 'serve', 'watch']);

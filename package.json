@@ -14,7 +14,7 @@
     "start": "gulp",
     "lint": "lint-trap",
     "test": "npm run lint && npm run cover",
-    "cover": "run-browser 'tests/*.js' --phantom --report text --report html --report cobertura | tee tests/test.js.tap | tap-spec",
+    "cover": "run-browser 'tests/*.js' --phantom --report text --report html | tap-spec",
     "view-cover": "npm run cover && opn ./coverage/index.html"
   },
   "main": "index.js",

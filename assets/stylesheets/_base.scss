@@ -1,12 +1,24 @@
 /* bitchcat base styles */
 
 $background-color: #0c0c0c;
+$platformer-width: 512px;
+$platformer-height: 384px;
 
 body {
   background-color: $background-color;
-  color: #c0c0c0;
 }
 
-.scene {
-  height: 100vw;
+.platformer {
+  margin: 1em auto;
+  position: relative;
+  width: $platformer-width;
+  height: $platformer-height;
 }
+
+#bitchcat {
+  display: inline-block;
+  width: 100%;
+  height: 100%;
+}
+
+/* TODO: Add Media Queries, make this responsive */
