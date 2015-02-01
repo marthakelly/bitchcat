@@ -13,7 +13,7 @@
 var levelSchema = [
   '                 p x  ',
   '                   x  ',
-  '  x                x  ',
+  '  x      xx        x  ',
   '  x        p p     x  ',
   '  x @   xxxxxxx    x  ',
   '  xxxxx            x  ',
@@ -309,7 +309,8 @@ Level.prototype.playerTouched = function(type, actor) {
   }                                                                             
 };
 
-var arrowCodes = {37: "left", 38: "up", 39: "right"};                           
+// TODO change
+var arrowCodes = {74: "left", 32: "up", 75: "right"};                           
                                                                                 
 function trackKeys(codes) {                                                     
   var pressed = Object.create(null);                                            
