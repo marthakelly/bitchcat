@@ -13,7 +13,7 @@
 var levelSchema = [
   '                 p x  ',
   '                   x  ',
-  '  x      xx        x  ',
+  '  x      xx         x ',
   '  x        p p     x  ',
   '  x @   xxxxxxx    x  ',
   '  xxxxx            x  ',
