@@ -25,8 +25,8 @@
   "dependencies": {},
   "devDependencies": {
     "del": "^1.1.1",
+    "global": "^4.3.0",
     "gulp": "^3.8.10",
-    "gulp-browserify": "^0.5.1",
     "gulp-connect": "^2.2.0",
     "gulp-ruby-sass": "^1.0.0-alpha.2",
     "lint-trap": "^1.0.0",

@@ -2,7 +2,6 @@
 var gulp = require('gulp');
 var sass = require('gulp-ruby-sass');
 var connect = require('gulp-connect');
-var browserify = require('gulp-browserify');
 var del = require('del');
 
 gulp.task('clean', function clean() {
@@ -15,9 +14,9 @@ gulp.task('compile-stylesheets', function compileCSS() {
     .pipe(connect.reload());
 });
 
+// TODO browserify
 gulp.task('compile-javascripts', function compileJS() {
-  gulp.src(['index.js', 'assets/javascripts/**/*.js'])
-    .pipe(browserify())
+  gulp.src(['./index.js', 'game_levels.js'])
     .pipe(gulp.dest('dist/javascripts'))
     .pipe(connect.reload());
 });

@@ -1,364 +1,371 @@
-(function() {
-  /* UTILITIES */
-  function timestamp() {
-    return window.performance && window.performance.now ? window.performance.now() : new Date().getTime();
-  }
-  function bound(x, min, max) {
-    return Math.max(min, Math.min(max, x));
-  }
-  function get(url, onsuccess) {
-    var request = new XMLHttpRequest();
-    request.onreadystatechange = function() {
-      if ((request.readyState == 4) && (request.status == 200))
-        onsuccess(request);
-    }
-    request.open("GET", url, true);
-    request.send();
-  }
+'use strict';
 
-  function overlap(x1, y1, w1, h1, x2, y2, w2, h2) {
-    return !(((x1 + w1 - 1) < x2) ||
-             ((x2 + w2 - 1) < x1) ||
-             ((y1 + h1 - 1) < y2) ||
-             ((y2 + h2 - 1) < y1))
-  }
-  
-  //-------------------------------------------------------------------------
-  // GAME CONSTANTS AND VARIABLES
-  //-------------------------------------------------------------------------
-  
-  var MAP      = { tw: 64, th: 48 },
-      TILE     = 32,
-      METER    = TILE,
-      GRAVITY  = 9.8 * 6, // default (exagerated) gravity
-      MAXDX    = 15,      // default max horizontal speed (15 tiles per second)
-      MAXDY    = 60,      // default max vertical speed   (60 tiles per second)
-      ACCEL    = 1/2,     // default take 1/2 second to reach maxdx (horizontal acceleration)
-      FRICTION = 1/6,     // default take 1/6 second to stop from maxdx (horizontal friction)
-      IMPULSE  = 1500,    // default player jump impulse
-      COLOR    = { BLACK: '#000000', YELLOW: '#ECD078', BRICK: '#D95B43', PINK: '#C02942', PURPLE: '#542437', GREY: '#333', SLATE: '#53777A', GOLD: 'gold' },
-      COLORS   = [ COLOR.YELLOW, COLOR.BRICK, COLOR.PINK, COLOR.PURPLE, COLOR.GREY ],
-      KEY      = { SPACE: 32, LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40 };
-      
-  var fps      = 60,
-      step     = 1/fps,
-      canvas   = document.getElementById('canvas'),
-      ctx      = canvas.getContext('2d'),
-      width    = canvas.width  = MAP.tw * TILE,
-      height   = canvas.height = MAP.th * TILE,
-      player   = {},
-      monsters = [],
-      treasure = [],
-      cells    = [];
-  
-  var t2p      = function(t)     { return t*TILE;                  },
-      p2t      = function(p)     { return Math.floor(p/TILE);      },
-      cell     = function(x,y)   { return tcell(p2t(x),p2t(y));    },
-      tcell    = function(tx,ty) { return cells[tx + (ty*MAP.tw)]; };
-  
-  
-  //-------------------------------------------------------------------------
-  // UPDATE LOOP
-  //-------------------------------------------------------------------------
+/*
+ * Name: levelSchema
+ * Desc: representation of the game board
+ * Type: Array
+ * Notes:
+ *   - x is a wall
+ *   - p is a plant
+ *   - @ is the start point
+ */
 
-  function onkey(ev, key, down) {
-    switch(key) {
-      case KEY.LEFT:  player.left  = down; ev.preventDefault(); return false;
-      case KEY.RIGHT: player.right = down; ev.preventDefault(); return false;
-      case KEY.SPACE: player.jump  = down; ev.preventDefault(); return false;
-    }
-  }
-  
-  function update(dt) {
-    updatePlayer(dt);
-    updateMonsters(dt);
-    checkTreasure();
-  }
+var levelSchema = [
+  '                 p x  ',
+  '                   x  ',
+  '  x                x  ',
+  '  x        p p     x  ',
+  '  x @   xxxxxxx    x  ',
+  '  xxxxx            x  ',
+  '      x               ',
+  '      xxxxxxxxxxxxxx  ',
+  '                      '
+];
 
-  function updatePlayer(dt) {
-    updateEntity(player, dt);
-  }
+/* eslint-disable */
+function Level(plan) {
+  this.width = plan[0].length;
+  this.height = plan.length;
+  this.grid = [];
+  this.actors = [];
 
-  function updateMonsters(dt) {
-    var n, max;
-    for(n = 0, max = monsters.length ; n < max ; n++)
-      updateMonster(monsters[n], dt);
-  }
+  for (var i = 0; i < this.height; i++) {
+    var line = plan[i];
+    var gridLine = [];
 
-  function updateMonster(monster, dt) {
-    if (!monster.dead) {
-      updateEntity(monster, dt);
-      if (overlap(player.x, player.y, TILE, TILE, monster.x, monster.y, TILE, TILE)) {
-        if ((player.dy > 0) && (monster.y - player.y > TILE/2))
-          killMonster(monster);
-        else
-          killPlayer(player);
+    for (var j = 0; j < this.width; j++) {
+      var ch = line[j];
+      var fieldType = null;
+      var Actor = actorChars[ch];
+
+      if (Actor) {
+        this.actors.push(
+          new Actor(
+            new Vector(j, i), ch));
       }
-    }
-  }
 
-  function checkTreasure() {
-    var n, max, t;
-    for(n = 0, max = treasure.length ; n < max ; n++) {
-      t = treasure[n];
-      if (!t.collected && overlap(player.x, player.y, TILE, TILE, t.x, t.y, TILE, TILE))
-        collectTreasure(t);
-    }
-  }
-
-  function killMonster(monster) {
-    player.killed++;
-    monster.dead = true;
-  }
-
-  function killPlayer(player) {
-    player.x = player.start.x;
-    player.y = player.start.y;
-    player.dx = player.dy = 0;
-  }
-
-  function collectTreasure(t) {
-    player.collected++;
-    t.collected = true;
-  }
-
-  function updateEntity(entity, dt) {
-    var wasleft    = entity.dx  < 0,
-        wasright   = entity.dx  > 0,
-        falling    = entity.falling,
-        friction   = entity.friction * (falling ? 0.5 : 1),
-        accel      = entity.accel    * (falling ? 0.5 : 1);
-  
-    entity.ddx = 0;
-    entity.ddy = entity.gravity;
-  
-    if (entity.left)
-      entity.ddx = entity.ddx - accel;
-    else if (wasleft)
-      entity.ddx = entity.ddx + friction;
-  
-    if (entity.right)
-      entity.ddx = entity.ddx + accel;
-    else if (wasright)
-      entity.ddx = entity.ddx - friction;
-  
-    if (entity.jump && !entity.jumping && !falling) {
-      entity.ddy = entity.ddy - entity.impulse; // an instant big force impulse
-      entity.jumping = true;
-    }
-  
-    entity.x  = entity.x  + (dt * entity.dx);
-    entity.y  = entity.y  + (dt * entity.dy);
-    entity.dx = bound(entity.dx + (dt * entity.ddx), -entity.maxdx, entity.maxdx);
-    entity.dy = bound(entity.dy + (dt * entity.ddy), -entity.maxdy, entity.maxdy);
-  
-    if ((wasleft  && (entity.dx > 0)) ||
-        (wasright && (entity.dx < 0))) {
-      entity.dx = 0; // clamp at zero to prevent friction from making us jiggle side to side
-    }
-  
-    var tx        = p2t(entity.x),
-        ty        = p2t(entity.y),
-        nx        = entity.x%TILE,
-        ny        = entity.y%TILE,
-        cell      = tcell(tx,     ty),
-        cellright = tcell(tx + 1, ty),
-        celldown  = tcell(tx,     ty + 1),
-        celldiag  = tcell(tx + 1, ty + 1);
-  
-    if (entity.dy > 0) {
-      if ((celldown && !cell) ||
-          (celldiag && !cellright && nx)) {
-        entity.y = t2p(ty);
-        entity.dy = 0;
-        entity.falling = false;
-        entity.jumping = false;
-        ny = 0;
+      // MEEP
+      if (ch === 'x') {
+        fieldType = 'wall';
       }
-    }
-    else if (entity.dy < 0) {
-      if ((cell      && !celldown) ||
-          (cellright && !celldiag && nx)) {
-        entity.y = t2p(ty + 1);
-        entity.dy = 0;
-        cell      = celldown;
-        cellright = celldiag;
-        ny        = 0;
-      }
-    }
-  
-    if (entity.dx > 0) {
-      if ((cellright && !cell) ||
-          (celldiag  && !celldown && ny)) {
-        entity.x = t2p(tx);
-        entity.dx = 0;
-      }
-    }
-    else if (entity.dx < 0) {
-      if ((cell     && !cellright) ||
-          (celldown && !celldiag && ny)) {
-        entity.x = t2p(tx + 1);
-        entity.dx = 0;
-      }
+
+      gridLine.push(fieldType);
     }
 
-    if (entity.monster) {
-      if (entity.left && (cell || !celldown)) {
-        entity.left = false;
-        entity.right = true;
-      }      
-      else if (entity.right && (cellright || !celldiag)) {
-        entity.right = false;
-        entity.left  = true;
-      }
+    this.grid.push(gridLine);
+  }
+
+  this.player = this.actors.filter(
+    function getActorType(actor) {
+      return actor.type === 'player';
     }
-  
-    entity.falling = ! (celldown || (nx && celldiag));
-  
-  }
+  )[0];
 
-  //-------------------------------------------------------------------------
-  // RENDERING
-  //-------------------------------------------------------------------------
-  
-  function render(ctx, frame, dt) {
-    ctx.clearRect(0, 0, width, height);
-    renderMap(ctx);
-    renderTreasure(ctx, frame);
-    renderPlayer(ctx, dt);
-    renderMonsters(ctx, dt);
-  }
+  this.status = this.finishDelay = null;
+}
+/* eslint-enable */
 
-  function renderMap(ctx) {
-    var x, y, cell;
-    for(y = 0 ; y < MAP.th ; y++) {
-      for(x = 0 ; x < MAP.tw ; x++) {
-        cell = tcell(x, y);
-        if (cell) {
-          ctx.fillStyle = COLORS[cell - 1];
-          ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
-        }
-      }
-    }
-  }
+Level.prototype.isFinished = function levelisFinished() {
+  return this.status !== null && this.finishDelay < 0;
+};
 
-  function renderPlayer(ctx, dt) {
-    ctx.fillStyle = COLOR.YELLOW;
-    ctx.fillRect(player.x + (player.dx * dt), player.y + (player.dy * dt), TILE, TILE);
+function Vector(x, y) {
+  this.x = x;
+  this.y = y;
+}
 
-    var n, max;
+Vector.prototype.plus = function vectorPlus(other) {
+  return new Vector(this.x + other.x, this.y + other.y);
+};
 
-    ctx.fillStyle = COLOR.GOLD;
-    for(n = 0, max = player.collected ; n < max ; n++)
-      ctx.fillRect(t2p(2 + n), t2p(2), TILE/2, TILE/2);
+Vector.prototype.times = function vectorTime(factor) {
+  return new Vector(this.x * factor, this.y * factor);
+};
 
-    ctx.fillStyle = COLOR.SLATE;
-    for(n = 0, max = player.killed ; n < max ; n++)
-      ctx.fillRect(t2p(2 + n), t2p(3), TILE/2, TILE/2);
-  }
+var actorChars = {
+  '@': Player,
+  'p': Plant
+};
 
-  function renderMonsters(ctx, dt) {
-    ctx.fillStyle = COLOR.SLATE;
-    var n, max, monster;
-    for(n = 0, max = monsters.length ; n < max ; n++) {
-      monster = monsters[n];
-      if (!monster.dead)
-        ctx.fillRect(monster.x + (monster.dx * dt), monster.y + (monster.dy * dt), TILE, TILE);
-    }
-  }
+function Player(pos) {
+  this.pos = pos.plus(new Vector(0, -0.5));
+  this.size = new Vector(0.8, 1.5);
+  this.speed = new Vector(0, 0);
+};
 
-  function renderTreasure(ctx, frame) {
-    ctx.fillStyle   = COLOR.GOLD;
-    ctx.globalAlpha = 0.25 + tweenTreasure(frame, 60);
-    var n, max, t;
-    for(n = 0, max = treasure.length ; n < max ; n++) {
-      t = treasure[n];
-      if (!t.collected)
-        ctx.fillRect(t.x, t.y + TILE/3, TILE, TILE*2/3);
-    }
-    ctx.globalAlpha = 1;
-  }
+Player.prototype.type = 'player';
 
-  function tweenTreasure(frame, duration) {
-    var half  = duration/2
-        pulse = frame%duration;
-    return pulse < half ? (pulse/half) : 1-(pulse-half)/half;
-  }
+function Plant(pos) {
+  this.basePos = this.pos = pos.plus(new Vector(0.2, 0.1));
+  this.size = new Vector(0.6, 0.6);
+  this.wobble = Math.random() * Math.PI * 2;
+}
 
-  //-------------------------------------------------------------------------
-  // LOAD THE MAP
-  //-------------------------------------------------------------------------
-  
-  function setup(map) {
-    var data    = map.layers[0].data,
-        objects = map.layers[1].objects,
-        n, obj, entity;
+Plant.prototype.type = 'plant';
 
-    for(n = 0 ; n < objects.length ; n++) {
-      obj = objects[n];
-      entity = setupEntity(obj);
-      switch(obj.type) {
-      case "player"   : player = entity; break;
-      case "monster"  : monsters.push(entity); break;
-      case "treasure" : treasure.push(entity); break;
-      }
-    }
+var level1 = new Level(levelSchema);
 
-    cells = data;
-  }
+function DOMDisplay(parent, level) {
+  this.wrap = parent.appendChild(elt("div", "game"));
+  this.level = level;
 
-  function setupEntity(obj) {
-    var entity = {};
-    entity.x        = obj.x;
-    entity.y        = obj.y;
-    entity.dx       = 0;
-    entity.dy       = 0;
-    entity.gravity  = METER * (obj.properties.gravity || GRAVITY);
-    entity.maxdx    = METER * (obj.properties.maxdx   || MAXDX);
-    entity.maxdy    = METER * (obj.properties.maxdy   || MAXDY);
-    entity.impulse  = METER * (obj.properties.impulse || IMPULSE);
-    entity.accel    = entity.maxdx / (obj.properties.accel    || ACCEL);
-    entity.friction = entity.maxdx / (obj.properties.friction || FRICTION);
-    entity.monster  = obj.type == "monster";
-    entity.player   = obj.type == "player";
-    entity.treasure = obj.type == "treasure";
-    entity.left     = obj.properties.left;
-    entity.right    = obj.properties.right;
-    entity.start    = { x: obj.x, y: obj.y }
-    entity.killed = entity.collected = 0;
-    return entity;
-  }
+  this.wrap.appendChild(this.drawBackground());
+  this.actorLayer = null;
+  this.drawFrame();
+}
 
-  //-------------------------------------------------------------------------
-  // THE GAME LOOP
-  //-------------------------------------------------------------------------
-  
-  var counter = 0, dt = 0, now,
-      last = timestamp(),
-      fpsmeter = new FPSMeter({ decimals: 0, graph: true, theme: 'dark', left: '5px' });
-  
-  function frame() {
-    fpsmeter.tickStart();
-    now = timestamp();
-    dt = dt + Math.min(1, (now - last) / 1000);
-    while(dt > step) {
-      dt = dt - step;
-      update(step);
-    }
-    render(ctx, counter, dt);
-    last = now;
-    counter++;
-    fpsmeter.tick();
-    requestAnimationFrame(frame, canvas);
-  }
-  
-  document.addEventListener('keydown', function(ev) { return onkey(ev, ev.keyCode, true);  }, false);
-  document.addEventListener('keyup',   function(ev) { return onkey(ev, ev.keyCode, false); }, false);
+var scale = 20;
 
-  get("level.json", function(req) {
-    setup(JSON.parse(req.responseText));
-    frame();
+DOMDisplay.prototype.drawBackground = function() {
+  var table = elt("table", "background");
+
+  table.style.width = this.level.width * scale + "px";
+  this.level.grid.forEach(function(row) {
+      var rowElt = table.appendChild(elt("tr"));
+      rowElt.style.height = scale + "px";
+      row.forEach(function(type) {
+        rowElt.appendChild(elt("td", type));
+        });
+      });
+  return table;
+};
+
+DOMDisplay.prototype.drawActors = function() {
+  var wrap = elt("div");
+  this.level.actors.forEach(function(actor) {
+    var rect = wrap.appendChild(elt("div",
+                                    "actor " + actor.type));
+    rect.style.width = actor.size.x * scale + "px";
+    rect.style.height = actor.size.y * scale + "px";
+    rect.style.left = actor.pos.x * scale + "px";
+    rect.style.top = actor.pos.y * scale + "px";
   });
+  return wrap;
+};
 
-})();
+DOMDisplay.prototype.drawFrame = function() {
+  if (this.actorLayer)
+    this.wrap.removeChild(this.actorLayer);
+  this.actorLayer = this.wrap.appendChild(this.drawActors());
+  this.wrap.className = "game " + (this.level.status || "");
+  this.scrollPlayerIntoView();
+};
 
+DOMDisplay.prototype.scrollPlayerIntoView = function() {
+  var width = this.wrap.clientWidth;
+  var height = this.wrap.clientHeight;
+  var margin = width / 3;
+
+  // The viewport
+  var left = this.wrap.scrollLeft, right = left + width;
+  var top = this.wrap.scrollTop, bottom = top + height;
+
+  var player = this.level.player;
+  var center = player.pos.plus(player.size.times(0.5))
+                 .times(scale);
+
+  if (center.x < left + margin)
+    this.wrap.scrollLeft = center.x - margin;
+  else if (center.x > right - margin)
+    this.wrap.scrollLeft = center.x + margin - width;
+  if (center.y < top + margin)
+    this.wrap.scrollTop = center.y - margin;
+  else if (center.y > bottom - margin)
+    this.wrap.scrollTop = center.y + margin - height;
+};
+
+DOMDisplay.prototype.clear = function() {
+  this.wrap.parentNode.removeChild(this.wrap);
+};
+
+Level.prototype.obstacleAt = function(pos, size) {
+  var xStart = Math.floor(pos.x);
+  var xEnd = Math.ceil(pos.x + size.x);
+  var yStart = Math.floor(pos.y);
+  var yEnd = Math.ceil(pos.y + size.y);
+
+  if (xStart < 0 || xEnd > this.width || yStart < 0)
+    return "wall";
+  if (yEnd > this.height)
+    return "lava";
+  for (var y = yStart; y < yEnd; y++) {
+    for (var x = xStart; x < xEnd; x++) {
+      var fieldType = this.grid[y][x];
+      if (fieldType) return fieldType;
+    }
+  }
+};
+
+Level.prototype.actorAt = function(actor) {
+  for (var i = 0; i < this.actors.length; i++) {
+    var other = this.actors[i];
+    if (other != actor &&
+        actor.pos.x + actor.size.x > other.pos.x &&
+        actor.pos.x < other.pos.x + other.size.x &&
+        actor.pos.y + actor.size.y > other.pos.y &&
+        actor.pos.y < other.pos.y + other.size.y)
+      return other;
+  }
+};
+
+var maxStep = 0.05;
+
+Level.prototype.animate = function(step, keys) {
+  if (this.status != null)
+    this.finishDelay -= step;
+
+  while (step > 0) {
+    var thisStep = Math.min(step, maxStep);
+    this.actors.forEach(function(actor) {
+      actor.act(thisStep, this, keys);
+    }, this);
+    step -= thisStep;
+  }
+};
+
+Plant.prototype.act = function(step) {
+  this.wobble += step * wobbleSpeed;
+  var wobblePos = Math.sin(this.wobble) * wobbleDist;
+  this.pos = this.basePos.plus(new Vector(0, wobblePos));
+};
+
+var playerXSpeed = 7;
+
+Player.prototype.moveX = function(step, level, keys) {
+  this.speed.x = 0;
+  if (keys.left) this.speed.x -= playerXSpeed;
+  if (keys.right) this.speed.x += playerXSpeed;
+
+  var motion = new Vector(this.speed.x * step, 0);
+  var newPos = this.pos.plus(motion);
+  var obstacle = level.obstacleAt(newPos, this.size);
+  if (obstacle)
+    level.playerTouched(obstacle);
+  else
+    this.pos = newPos;
+};
+
+
+
+/* eslint-disable */
+console.log(level1.width, 'by', level1.height);
+/* eslint-enable */
+
+function elt(name, className) {
+  var elt = document.createElement(name);
+  if (className) elt.className = className;
+  return elt;
+}
+var wobbleSpeed = 8, wobbleDist = 0.07;
+
+var gravity = 30;
+var jumpSpeed = 17;
+
+Player.prototype.moveY = function(step, level, keys) {
+  this.speed.y += step * gravity;
+  var motion = new Vector(0, this.speed.y * step);
+  var newPos = this.pos.plus(motion);
+  var obstacle = level.obstacleAt(newPos, this.size);
+  if (obstacle) {
+    level.playerTouched(obstacle);
+    if (keys.up && this.speed.y > 0)
+      this.speed.y = -jumpSpeed;
+    else
+      this.speed.y = 0;
+  } else {
+    this.pos = newPos;
+  }
+};
+
+Player.prototype.act = function(step, level, keys) {                               
+  this.moveX(step, level, keys);                                                   
+  this.moveY(step, level, keys);                                                   
+                                                                                   
+  var otherActor = level.actorAt(this);                                            
+  if (otherActor)                                                                  
+    level.playerTouched(otherActor.type, otherActor);                              
+                                                                                   
+  // Losing animation                                                           
+  if (level.status == "lost") {                                                 
+    this.pos.y += step;                                                         
+    this.size.y -= step;                                                        
+  }                                                                             
+};                                                                              
+
+Level.prototype.playerTouched = function(type, actor) {                         
+  if (type == "lava" && this.status == null) {                                  
+    this.status = "lost";                                                       
+    this.finishDelay = 1;                                                       
+  } else if (type == "coin") {                                                  
+    this.actors = this.actors.filter(function(other) {                          
+      return other != actor;                                                    
+    });                                                                         
+    if (!this.actors.some(function(actor) {                                     
+      return actor.type == "coin";                                              
+    })) {                                                                       
+      this.status = "won";                                                      
+      this.finishDelay = 1;                                                     
+    }                                                                           
+  }                                                                             
+};
+
+var arrowCodes = {37: "left", 38: "up", 39: "right"};                           
+                                                                                
+function trackKeys(codes) {                                                     
+  var pressed = Object.create(null);                                            
+  function handler(event) {                                                     
+    if (codes.hasOwnProperty(event.keyCode)) {                                  
+      var down = event.type == "keydown";                                       
+      pressed[codes[event.keyCode]] = down;                                     
+      event.preventDefault();                                                   
+    }                                                                           
+  }                                                                             
+  addEventListener("keydown", handler);                                         
+  addEventListener("keyup", handler);                                           
+  return pressed;                                                               
+}
+
+function runAnimation(frameFunc) {                                              
+  var lastTime = null;                                                          
+  function frame(time) {                                                        
+    var stop = false;                                                           
+    if (lastTime != null) {                                                     
+      var timeStep = Math.min(time - lastTime, 100) / 1000;                     
+      stop = frameFunc(timeStep) === false;                                     
+    }                                                                           
+    lastTime = time;                                                            
+    if (!stop)                                                                  
+      requestAnimationFrame(frame);                                             
+  }                                                                             
+  requestAnimationFrame(frame);                                                 
+}  
+
+var arrows = trackKeys(arrowCodes);
+
+function runLevel(level, Display, andThen) {                                    
+  var display = new Display(document.body, level);                              
+  runAnimation(function(step) {                                                 
+    level.animate(step, arrows);                                                
+    display.drawFrame(step);                                                    
+    if (level.isFinished()) {                                                   
+      display.clear();                                                          
+      if (andThen)                                                              
+        andThen(level.status);                                                  
+      return false;                                                             
+    }                                                                           
+  });                                                                           
+}
+
+function runGame(plans, Display) {                                              
+  function startLevel(n) {                                                      
+    runLevel(new Level(plans[n]), Display, function(status) {                   
+      if (status == "lost")                                                     
+        startLevel(n);                                                          
+      else if (n < plans.length - 1)                                            
+        startLevel(n + 1);                                                      
+      else                                                                      
+        console.log("You win!");                                                
+    });                                                                         
+  }                                                                             
+  startLevel(0);                                                                
+} 
