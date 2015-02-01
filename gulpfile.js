@@ -32,7 +32,7 @@ gulp.task('watch-stylesheets', function watchCSS() {
 });
 
 gulp.task('watch-javascripts', function watchJS() {
-  gulp.watch('assets/javascripts/*.js', ['compile-javascripts']);
+  gulp.watch('./*js', ['compile-javascripts']);
 });
 
 gulp.task('watch-static', function watchStatic() {
